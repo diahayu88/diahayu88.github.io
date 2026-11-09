@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>MAHARADA · Gerbang Inovasi Pembelajaran</title>
-<!-- MAHARADA v1.05 -->
+<!-- MAHARADA v1.06 -->
 <meta name="theme-color" content="#2a1446">
 <meta name="description" content="MAHARADA — gerbang menuju inovasi pembelajaran bersama Bu Diah.">
 <style>
@@ -312,7 +312,7 @@ body.portrait #modal.preview .panel{max-height:56vh}
         <div class="grid">
           <label class="full">Fokus / deskripsi singkat <small id="fokusCount">0/140</small><input name="fokus" maxlength="140" placeholder="Apa tujuan utama inovasi ini?"></label>
           <div class="full"><span class="lbl">Fungsi</span><div id="fungsiList"></div><button type="button" class="btn small" id="btnAddFungsi">＋ Tambah fungsi</button></div>
-          <div class="full shot"><span class="lbl">Gambar cuplikan aplikasi (opsional)</span><img id="shotImg" alt="Pratinjau cuplikan" class="hidden"><input type="file" id="shotFile" accept="image/*"><button type="button" class="btn small hidden" id="btnShotDel">Hapus gambar</button></div>
+          <div class="full shot"><span class="lbl">Gambar cuplikan aplikasi (tampil di depan gerbang; disarankan tangkapan layar mendatar)</span><img id="shotImg" alt="Pratinjau cuplikan" class="hidden"><input type="file" id="shotFile" accept="image/*"><button type="button" class="btn small hidden" id="btnShotDel">Hapus gambar</button></div>
         </div>
       </fieldset>
       <fieldset><legend>3 · Narasi Bu Diah</legend>
@@ -367,7 +367,7 @@ const MAHARADA_INFO = {
   judul: 'MAHARADA',
   tagline: 'Gerbang Inovasi Pembelajaran',
   makna: '',            // [ISI] kepanjangan atau makna MAHARADA. Biarkan kosong bila tidak dipakai.
-  versi: 'v1.05'
+  versi: 'v1.06'
 };
 
 const AVATAR = {
@@ -806,22 +806,29 @@ function buildCandi(o){
   if(ghost){ const p=plusSprite(); p.position.set(0,1.6,0); inner.add(p); icon=p; }
   if(o.label){ label=labelSprite(o.label,o.accent||'#ffd98a'); label.position.set(0,0.42,1.05); root.add(label); }
   if(o.status==='segera' && !ghost) { scaffold=buildScaffold(GAP); inner.add(scaffold); }
+  // papan pratinjau berbingkai emas di depan gerbang (poster otomatis atau foto aplikasi)
+  let preview=null, frame=null;
+  if(o.item && !ghost && !big){
+    const pz = o.status==='segera' ? 0.63 : 0.68;
+    frame=mesh(new THREE.BoxGeometry(2.56,1.66,0.05),std('#d9a842',.3,{metalness:.8,emissive:0x3a2600,emissiveIntensity:.5,transparent:true}),[0,1.45,pz-0.03]); inner.add(frame);
+    preview=mesh(new THREE.PlaneGeometry(2.4,1.5),new THREE.MeshBasicMaterial({map:posterTexture(o.item),transparent:true,toneMapped:false}),[0,1.45,pz]); inner.add(preview);
+  }
   if(!big){
     hit=mesh(new THREE.BoxGeometry(2*(GAP+1.25)+0.3,H_GATE+1.2,1.8),new THREE.MeshBasicMaterial({visible:false}),[0,(H_GATE+1.2)/2,0]); root.add(hit);
     ring=mesh(new THREE.RingGeometry(1.5,1.9,48),basic(new THREE.Color(o.accent||'#ffd98a'),{transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}),[0,0.03,0.2]);
     ring.rotation.x=-Math.PI/2; root.add(ring);
   }
-  return {root,inner,halves,glow,icon,label,scaffold,hit,ring,GAP};
+  return {root,inner,halves,glow,icon,label,scaffold,hit,ring,GAP,preview,frame};
 }
 function buildScaffold(GAP){
   const g=new THREE.Group(); const mat=M.bamboo; const pole=(len)=>new THREE.CylinderGeometry(0.035,0.035,len,6);
   for(const s of [-1,1]){
     for(const xx of [GAP+0.12,GAP+1.3]) g.add(mesh(pole(3.3),mat,[s*xx,1.65,0.74]));
-    for(const yy of [0.75,1.65,2.6]){ const m=mesh(pole(1.4),mat,[s*(GAP+0.71),yy,0.74]); m.rotation.z=Math.PI/2; g.add(m); }
+    for(const yy of [0.35,2.95]){ const m=mesh(pole(1.4),mat,[s*(GAP+0.71),yy,0.74]); m.rotation.z=Math.PI/2; g.add(m); }
     const dg=mesh(pole(2.1),mat,[s*(GAP+0.71),1.2,0.78]); dg.rotation.z=s*0.62; g.add(dg);
   }
-  for(const s of [-1,1]){ const b=mesh(pole(1.5),mat,[0,1.0,0.6]); b.rotation.z=s*0.85; g.add(b); }
-  const ban=mesh(new THREE.PlaneGeometry(2.3,0.58),basic(0xffffff,{map:T.banner,side:THREE.DoubleSide}),[0,2.2,0.84]); g.add(ban);
+  for(const s of [-1,1]){ const b=mesh(pole(1.2),mat,[0,0.42,0.86]); b.rotation.z=s*0.85; g.add(b); }
+  const ban=mesh(new THREE.PlaneGeometry(2.3,0.5),basic(0xffffff,{map:T.banner,side:THREE.DoubleSide}),[0,2.55,0.84]); g.add(ban);
   return g;
 }
 
@@ -918,15 +925,66 @@ function buildAvatar(){
   return { root, body, torso, head, eyes, mouth, armR, armL, hit, blinkT:2, blinkP:0, mouthOpen:0, mouthPh:0, gesture:null, turn:0 };
 }
 
+/* ---------- Papan pratinjau: poster otomatis & foto aplikasi ---------- */
+function wrapLines(x,text,maxW,maxLines){ const words=String(text||'').split(/\s+/); const lines=[]; let cur='';
+  words.forEach(w=>{ const t=cur?cur+' '+w:w; if(x.measureText(t).width>maxW && cur){ lines.push(cur); cur=w; } else cur=t; }); if(cur) lines.push(cur);
+  if(lines.length>maxLines){ lines.length=maxLines; lines[maxLines-1]=lines[maxLines-1].replace(/\s*\S*$/,'')+'…'; } return lines; }
+function posterCanvas(item){
+  const W2=640,H2=400,c=cv(W2,H2),x=c.getContext('2d'), col=item.warna||'#f4c35a';
+  const g=x.createLinearGradient(0,0,W2,H2); g.addColorStop(0,'#160c24'); g.addColorStop(1,col); x.fillStyle=g; x.fillRect(0,0,W2,H2);
+  x.globalAlpha=0.12; x.strokeStyle='#ffffff'; x.lineWidth=2;
+  for(let i=-H2;i<W2;i+=36){ x.beginPath(); x.moveTo(i,0); x.lineTo(i+H2,H2); x.stroke(); }
+  x.globalAlpha=1;
+  const rg=x.createRadialGradient(150,170,10,150,170,150); rg.addColorStop(0,hexA(col,.85)); rg.addColorStop(1,hexA(col,0)); x.fillStyle=rg; x.fillRect(0,20,300,300);
+  x.font='130px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(item.ikon||'✨',150,175);
+  x.textAlign='left'; x.textBaseline='alphabetic'; x.fillStyle='#ffffff'; x.shadowColor='rgba(0,0,0,.45)'; x.shadowBlur=10;
+  x.font='800 40px system-ui,Segoe UI,Arial'; let y=118; wrapLines(x,item.nama,330,3).forEach(l=>{ x.fillText(l,284,y); y+=46; });
+  x.shadowBlur=0; x.fillStyle='rgba(255,255,255,.88)'; x.font='500 22px system-ui,Segoe UI,Arial'; y+=6;
+  wrapLines(x,item.fokus,330,3).forEach(l=>{ x.fillText(l,284,y); y+=30; });
+  x.fillStyle='rgba(0,0,0,.35)'; x.fillRect(0,H2-58,W2,58);
+  x.fillStyle='#ffe39a'; x.font='700 24px system-ui,Segoe UI,Arial'; x.fillText(item.status==='tersedia'?'Ketuk gerbang untuk mengenal & masuk ›':'Segera dibuka · ketuk untuk melihat',24,H2-21);
+  return c;
+}
+function posterTexture(item){ const t=tx(posterCanvas(item)); t.anisotropy=8; return t; }
+function photoTexture(img,item){
+  const W2=640,H2=400,c=cv(W2,H2),x=c.getContext('2d');
+  const k=Math.max(W2/img.width,H2/img.height), w=img.width*k, h=img.height*k; x.drawImage(img,(W2-w)/2,(H2-h)/2,w,h);
+  const g=x.createLinearGradient(0,H2-110,0,H2); g.addColorStop(0,'rgba(0,0,0,0)'); g.addColorStop(1,'rgba(0,0,0,.78)'); x.fillStyle=g; x.fillRect(0,H2-110,W2,110);
+  x.font='44px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.textBaseline='middle'; x.fillText(item.ikon||'✨',22,H2-36);
+  x.fillStyle='#ffffff'; x.font='800 32px system-ui,Segoe UI,Arial'; x.fillText(wrapLines(x,item.nama,520,1)[0]||'',80,H2-36);
+  const t=tx(c); t.anisotropy=8; return t;
+}
+const IMG_CACHE={}, IMG_KEY='maharada_img_v1_';
+function driveId(url){ const m=/\/d\/([\w-]{10,})/.exec(url||'') || /[?&]id=([\w-]{10,})/.exec(url||''); return m?m[1]:null; }
+async function photoDataUrl(url){
+  const id=driveId(url);
+  if(!id || !Api.ok()) return url;                                   // gambar dari luar Drive: dicoba langsung
+  if(IMG_CACHE[id]) return IMG_CACHE[id];
+  try{ const c=localStorage.getItem(IMG_KEY+id); if(c){ IMG_CACHE[id]=c; return c; } }catch(e){}
+  const r=await fetch(SERVER.url+(SERVER.url.indexOf('?')<0?'?':'&')+'action=gambar&id='+encodeURIComponent(id)); const j=await r.json();
+  if(!j||!j.ok||!j.data) throw new Error('gambar');
+  IMG_CACHE[id]=j.data; try{ localStorage.setItem(IMG_KEY+id,j.data); }catch(e){}
+  return j.data;
+}
+async function loadPreviewPhoto(G){
+  try{
+    const src=await photoDataUrl(G.item.cuplikan);
+    const img=await new Promise((res,rej)=>{ const im=new Image(); if(!/^data:/.test(src)) im.crossOrigin='anonymous'; im.onload=()=>res(im); im.onerror=rej; im.src=src; });
+    if(!G.preview || !G.root.parent) return;
+    const old=G.preview.material.map; G.preview.material.map=photoTexture(img,G.item); G.preview.material.needsUpdate=true; if(old) old.dispose();
+  }catch(e){ /* poster otomatis tetap tampil */ }
+}
+
 /* ---------- Gerbang lobi ---------- */
 function buildGates(newId){
   W.gates.forEach(G=>{ scene.remove(G.root); G.root.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); });
   W.gates=[];
   const list=state.owner ? ITEMS.concat([{id:'__plus',nama:'Tambah Inovasi',ikon:'＋',warna:'#ffd98a',_plus:true}]) : ITEMS.slice();
   list.forEach((it,i)=>{
-    const C=buildCandi({accent:it.warna,icon:it._plus?null:it.ikon,ornamen:it.ornamen,label:it._plus?'＋ Tambah Inovasi':it.nama,status:it.status,ghost:!!it._plus});
+    const C=buildCandi({accent:it.warna,icon:it._plus?null:it.ikon,ornamen:it.ornamen,label:it._plus?'＋ Tambah Inovasi':it.nama,status:it.status,ghost:!!it._plus,item:it._plus?null:it});
     C.root.scale.setScalar(GATE_S); scene.add(C.root);
     const G=Object.assign(C,{item:it,index:i,open:0,focus:0,focusTarget:0,hov:0,build:(newId&&it.id===newId)?0:1,plus:!!it._plus,sparks:null});
+    if(C.preview && it.cuplikan) loadPreviewPhoto(G);
     C.hit.userData.gate=i;
     if(G.build<1){ G.sparks=emojiSprite('✨','#ffd98a',1.6); G.root.add(G.sparks); G.sparks.position.set(0,1.5,0.6); }
     W.gates.push(G);
@@ -1075,7 +1133,7 @@ function updateGates(dt,t){
     const px=rx+(P.focusPos.x-rx)*f, pz=rz+(P.focusPos.z-rz)*f, py=P.focusPos.y*f;
     G.root.position.set(px,py,pz);
     const faceCam=Math.atan2(camera.position.x-px,camera.position.z-pz);
-    G.root.rotation.y=a+angDiff(a,faceCam)*f;
+    G.root.rotation.y=a+angDiff(a,faceCam)*Math.max(f,0.88);   // gerbang menghadap pengunjung agar papan pratinjau terbaca
     const isHL=state.phase==='lobby' && (i===state.highlight || i===W.hover) && state.selected<0;
     G.hov=damp(G.hov,isHL?1:0,6,dt);
     if(G.build<1){ G.build=Math.min(1,G.build+dt/2.4); if(G.sparks){ G.sparks.material.opacity=1-G.build; G.sparks.scale.setScalar(1.2+G.build*2); if(G.build>=1){ G.root.remove(G.sparks); G.sparks=null; } } }
@@ -1085,6 +1143,8 @@ function updateGates(dt,t){
     G.open=damp(G.open,openT,3.5,dt);
     G.halves.forEach((h,k)=>{ const s=k===0?-1:1; h.position.x=s*G.open*0.95; h.rotation.y=-s*G.open*0.32; });
     G.glow.material.opacity=Math.min(1,G.open*1.1)*0.95; G.glow.scale.set(1.0+G.open*1.9,3.4,1);
+    if(G.preview){ const po=1-clamp((G.open-0.2)*2.2); G.preview.material.opacity=po; G.frame.material.opacity=po; G.preview.visible=po>0.02; G.frame.visible=po>0.02;
+      G.frame.material.emissiveIntensity=0.5+G.hov*0.9; }
     if(G.ring) G.ring.material.opacity=G.hov*0.75*(0.75+0.25*Math.sin(t*4));
     if(G.icon){ G.icon.position.y=(G.plus?1.6:H_GATE+0.45)+Math.sin(t*2+i)*0.08; }
     if(G.label){ const lo=Math.max(G.hov, state.selected===i?1:0); G.label.material.opacity=lo; G.label.visible=lo>0.03; }
